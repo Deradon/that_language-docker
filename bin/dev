@@ -1,0 +1,6 @@
+#!/usr/bin/env sh
+
+sh ./bin/build
+# echo Goto: http://`sh ./bin/ip`/test
+docker run -p 4567:4567 deradon/that_language
+sh ./bin/clean

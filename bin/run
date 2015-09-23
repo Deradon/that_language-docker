@@ -1,0 +1,4 @@
+#!/usr/bin/env sh
+
+docker run -p 80:80 -d deradon/that_language
+echo Goto: http://`sh ./bin/ip`/test

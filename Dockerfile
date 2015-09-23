@@ -5,6 +5,7 @@ MAINTAINER Patrick Helm <me@patrick-helm.de>
 ENV BUILD_PACKAGES build-base gcc make git
 ENV RUBY_PACKAGES ruby ruby-io-console ruby-dev ruby-bundler ruby-json
 ENV RUBY_GEMS thin sinatra rake
+ENV RACK_ENV production
 
 # RUN
 RUN apk update && \
@@ -24,4 +25,5 @@ RUN  bundle install \
      --jobs=4
 
 EXPOSE 4567
-CMD ["rackup -p 4567"]
+CMD bundle exec rackup -p 4567
+# CMD ["./service"]

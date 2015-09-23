@@ -25,5 +25,4 @@ RUN  bundle install \
      --jobs=4
 
 EXPOSE 4567
-CMD bundle exec rackup -p 4567
-# CMD ["./service"]
+CMD ["./service"]

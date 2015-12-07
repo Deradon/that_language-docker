@@ -1,26 +1,32 @@
-GIT
-  remote: http://gitlab.patrick-helm.de/Ruby/that_language-service.git
-  revision: 14b371819fe5555d70785c5930d933822d17dff5
-  ref: 14b371819fe5555d70785c5930d933822d17dff5
-  specs:
-    that_language-service (0.1.0.pre)
-      sinatra (~> 1.4.6)
-      that_language (~> 0.1.0.pre)
-      thin (~> 1.6.4)
-
 GEM
   remote: https://rubygems.org/
   specs:
+    backports (3.6.7)
     daemons (1.2.3)
     eventmachine (1.0.8)
+    multi_json (1.11.2)
     rack (1.6.4)
     rack-protection (1.5.3)
       rack
+    rack-test (0.6.3)
+      rack (>= 1.0)
     sinatra (1.4.6)
       rack (~> 1.4)
       rack-protection (~> 1.4)
       tilt (>= 1.3, < 3)
-    that_language (0.1.0.pre)
+    sinatra-contrib (1.4.6)
+      backports (>= 2.0)
+      multi_json
+      rack-protection
+      rack-test
+      sinatra (~> 1.4.0)
+      tilt (>= 1.3, < 3)
+    that_language (0.1.0)
+    that_language-service (0.1.0)
+      sinatra (~> 1.4.6)
+      sinatra-contrib
+      that_language (~> 0.1.0)
+      thin (~> 1.6.4)
     thin (1.6.4)
       daemons (~> 1.0, >= 1.0.9)
       eventmachine (~> 1.0, >= 1.0.4)
@@ -31,7 +37,7 @@ PLATFORMS
   ruby
 
 DEPENDENCIES
-  that_language-service!
+  that_language-service (~> 0.1.0)
 
 BUNDLED WITH
    1.10.6

@@ -7,9 +7,10 @@ ARG RUBY_VERSION=4.0
 
 FROM ruby:${RUBY_VERSION}-slim AS builder
 
-# git is needed at build time: the Gemfile carries two git sources.
+# build-essential only. git was needed while the Gemfile carried git sources;
+# every gem now resolves from rubygems.
 RUN apt-get update -qq && \
-    apt-get install -y --no-install-recommends build-essential git && \
+    apt-get install -y --no-install-recommends build-essential && \
     rm -rf /var/lib/apt/lists/*
 
 ENV BUNDLE_PATH=/usr/local/bundle \
@@ -22,12 +23,8 @@ WORKDIR /app
 # Above the COPY of application files on purpose, so editing config.ru does not
 # invalidate the bundle.
 COPY Gemfile Gemfile.lock ./
-# The .git directories of the two git-sourced gems are build-time debris; the
-# checkouts themselves stay. Bundler nests them under a Ruby ABI directory, so
-# this searches rather than assuming the path.
 RUN bundle install && \
-    rm -rf "${BUNDLE_PATH}/cache" && \
-    find "${BUNDLE_PATH}" -path '*/bundler/gems/*/.git' -maxdepth 6 -type d -prune -exec rm -rf {} +
+    rm -rf "${BUNDLE_PATH}/cache"
 
 
 FROM ruby:${RUBY_VERSION}-slim AS runtime

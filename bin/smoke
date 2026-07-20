@@ -33,22 +33,26 @@ cleanup() {
 }
 trap cleanup EXIT
 
-# --- 1. Gemfile.lock: both core gems must come from git, not rubygems --------
+# --- 1. Gemfile.lock: both core gems must come from rubygems, not git --------
 #
-# A Gemfile is not transitive. If only that_language-service were declared,
-# Bundler would resolve that_language from the service's gemspec (~> 0.1) and
-# land on the published 0.1.2, which raises on File.exists? at the first
-# request -- a clean build that dies at runtime. Entries resolved from rubygems
-# carry a sha256= in the CHECKSUMS block; git-sourced ones do not.
+# This check used to assert the exact opposite. Until that_language 0.2.0 was
+# published, the Gemfile had to name both gems from git: the service's gemspec
+# pinned `that_language ~> 0.1`, which resolved to the broken published 0.1.2 --
+# a clean build that died at the first request. Both are on rubygems now, and a
+# git source reappearing here would mean someone reintroduced that workaround.
+#
+# Entries resolved from rubygems carry a sha256= in the CHECKSUMS block;
+# git-sourced ones do not. that_language is checked even though only the service
+# is declared in the Gemfile -- it must arrive transitively via the gemspec.
 echo "Gemfile.lock"
 for gem in that_language that_language-service; do
   line="$(grep -E "^  ${gem} \(" Gemfile.lock || true)"
   if [ -z "${line}" ]; then
     fail "${gem} is absent from Gemfile.lock CHECKSUMS"
   elif printf '%s' "${line}" | grep -q 'sha256='; then
-    fail "${gem} resolves from rubygems (carries a sha256=)"
+    pass "${gem} resolves from rubygems"
   else
-    pass "${gem} is git-sourced"
+    fail "${gem} is git-sourced (the 0.1.2 workaround is back)"
   fi
 done
 

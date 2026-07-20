@@ -12,7 +12,7 @@ jobs:
     name: build and smoke-test the image
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # ubuntu-latest ships Docker, so a plain build needs no setup action.
       # Only the default gem-10k tier is built: the larger tiers need a separate

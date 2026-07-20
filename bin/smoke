@@ -1,0 +1,146 @@
+#!/usr/bin/env bash
+#
+# Smoke-test a built image against a container it starts itself.
+#
+#   bin/smoke [image] [port]
+#
+# Runs the same checks locally that CI runs, so a failure can be reproduced
+# without pushing. Every assertion below has already cost debugging time once;
+# the comment above each says which trap it guards.
+
+set -euo pipefail
+
+IMAGE="${1:-that_language-service:ci}"
+PORT="${2:-4567}"
+BASE="http://localhost:${PORT}"
+CONTAINER=""
+
+failures=0
+
+pass() { printf '  ok    %s\n' "$1"; }
+fail() { printf '  FAIL  %s\n' "$1"; failures=$((failures + 1)); }
+
+cleanup() {
+  if [ -n "${CONTAINER}" ]; then
+    docker rm --force "${CONTAINER}" >/dev/null 2>&1 || true
+  fi
+}
+trap cleanup EXIT
+
+# --- 1. Gemfile.lock: both core gems must come from git, not rubygems --------
+#
+# A Gemfile is not transitive. If only that_language-service were declared,
+# Bundler would resolve that_language from the service's gemspec (~> 0.1) and
+# land on the published 0.1.2, which raises on File.exists? at the first
+# request -- a clean build that dies at runtime. Entries resolved from rubygems
+# carry a sha256= in the CHECKSUMS block; git-sourced ones do not.
+echo "Gemfile.lock"
+for gem in that_language that_language-service; do
+  line="$(grep -E "^  ${gem} \(" Gemfile.lock || true)"
+  if [ -z "${line}" ]; then
+    fail "${gem} is absent from Gemfile.lock CHECKSUMS"
+  elif printf '%s' "${line}" | grep -q 'sha256='; then
+    fail "${gem} resolves from rubygems (carries a sha256=)"
+  else
+    pass "${gem} is git-sourced"
+  fi
+done
+
+# --- 2. Boot the container --------------------------------------------------
+echo "container"
+CONTAINER="$(docker run -d -p "${PORT}:4567" "${IMAGE}")"
+
+for _ in $(seq 1 60); do
+  if curl -fsS -o /dev/null "${BASE}/version" 2>/dev/null; then break; fi
+  if [ -z "$(docker ps -q --filter "id=${CONTAINER}")" ]; then
+    echo "container exited during boot:" >&2
+    docker logs "${CONTAINER}" >&2
+    exit 1
+  fi
+  sleep 1
+done
+
+if ! curl -fsS -o /dev/null "${BASE}/version"; then
+  echo "container never answered on ${BASE}/version:" >&2
+  docker logs "${CONTAINER}" >&2
+  exit 1
+fi
+pass "answers on ${BASE}/version"
+
+# --- 3. The eight endpoints, over GET and POST ------------------------------
+#
+# The endpoint list is a three-repository contract shared with that_language
+# and that_language-client. Changing it here is a change in three repos.
+echo "endpoints"
+TEXT="Guten Tag mein Freund"
+
+check_status() {
+  local label="$1" expected="$2"
+  shift 2
+  local got
+  got="$(curl -s -o /dev/null -w '%{http_code}' "$@")"
+  if [ "${got}" = "${expected}" ]; then
+    pass "${label} -> ${got}"
+  else
+    fail "${label} -> ${got}, expected ${expected}"
+  fi
+}
+
+for path in language language_code detect details; do
+  check_status "GET  /${path}" 200 --get --data-urlencode "text=${TEXT}" "${BASE}/${path}"
+  check_status "POST /${path}" 200 --data-urlencode "text=${TEXT}" "${BASE}/${path}"
+done
+
+for path in available available_languages available_language_codes version; do
+  check_status "GET  /${path}" 200 "${BASE}/${path}"
+  check_status "POST /${path}" 200 -X POST "${BASE}/${path}"
+done
+
+# Detection has to actually work, not just answer 200.
+detected="$(curl -s --get --data-urlencode "text=${TEXT}" "${BASE}/language")"
+if printf '%s' "${detected}" | grep -q 'German'; then
+  pass "German detected"
+else
+  fail "German not detected, got: ${detected}"
+fi
+
+# --- 4. A non-localhost Host header is accepted -----------------------------
+#
+# Sinatra 4's Rack::Protection::HostAuthorization allow-lists localhost only in
+# the development environment, so a development container answers
+# 403 Host not permitted to everything arriving through a proxy or a domain
+# name. This is the regression test for APP_ENV=production being pinned.
+echo "host authorization"
+check_status "Host: that-language.example.com" 200 \
+  -H "Host: that-language.example.com" "${BASE}/version"
+
+# --- 5. The cache is warm before the port is open ---------------------------
+#
+# Wordlists load lazily and memoise at module level (~0.9 s cold). config.ru
+# pays that at boot, before `run`, so the first request does not. Nothing else
+# would catch that warm-up silently regressing -- the container would still
+# pass every check above, just slower on request one.
+echo "boot order"
+log="$(docker logs "${CONTAINER}" 2>&1)"
+warm="$(printf '%s\n' "${log}" | grep -n 'Cache warm' | head -1 | cut -d: -f1)"
+listening="$(printf '%s\n' "${log}" | grep -n 'Listening on' | head -1 | cut -d: -f1)"
+
+if [ -z "${warm}" ]; then
+  fail "no 'Cache warm' line in the container log"
+elif [ -z "${listening}" ]; then
+  fail "no 'Listening on' line in the container log"
+elif [ "${warm}" -lt "${listening}" ]; then
+  pass "'Cache warm' (line ${warm}) precedes 'Listening on' (line ${listening})"
+else
+  fail "'Cache warm' (line ${warm}) does not precede 'Listening on' (line ${listening})"
+fi
+
+# --- Result -----------------------------------------------------------------
+echo
+if [ "${failures}" -eq 0 ]; then
+  echo "all checks passed"
+else
+  echo "${failures} check(s) failed"
+  docker logs "${CONTAINER}" 2>&1 | tail -40 >&2
+  exit 1
+fi

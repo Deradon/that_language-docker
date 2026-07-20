@@ -7,6 +7,12 @@
 # Runs the same checks locally that CI runs, so a failure can be reproduced
 # without pushing. Every assertion below has already cost debugging time once;
 # the comment above each says which trap it guards.
+#
+# SMOKE_DOCKER_RUN_OPTS passes extra flags to the `docker run` below. Some hosts
+# cannot start a container under the default settings and the checks are worth
+# running there anyway -- a Docker-in-LXC host on a pre-5.x kernel needs
+# --security-opt systempaths=unconfined, because runc cannot mask /proc/acpi.
+# Unset everywhere else, so CI and local runs are unaffected.
 
 set -euo pipefail
 
@@ -48,7 +54,9 @@ done
 
 # --- 2. Boot the container --------------------------------------------------
 echo "container"
-CONTAINER="$(docker run -d -p "${PORT}:4567" "${IMAGE}")"
+# Unquoted on purpose: SMOKE_DOCKER_RUN_OPTS is a list of flags, not one word.
+# shellcheck disable=SC2086
+CONTAINER="$(docker run -d ${SMOKE_DOCKER_RUN_OPTS:-} -p "${PORT}:4567" "${IMAGE}")"
 
 for _ in $(seq 1 60); do
   if curl -fsS -o /dev/null "${BASE}/version" 2>/dev/null; then break; fi

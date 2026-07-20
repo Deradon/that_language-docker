@@ -1,0 +1,5 @@
+# Wordlist tiers are dropped in here to be baked into an image. They come from a
+# separate repository, are hundreds of megabytes, and must never be committed
+# to this one. The .keep is what makes the directory exist for COPY.
+/wordlists/*
+!/wordlists/.keep

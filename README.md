@@ -1,3 +1,5 @@
+[![CI](https://github.com/Deradon/that_language-docker/actions/workflows/ci.yml/badge.svg)](https://github.com/Deradon/that_language-docker/actions/workflows/ci.yml)
+
 # that_language-docker
 
 Container packaging for [`that_language-service`][service] — the HTTP API in
@@ -93,6 +95,13 @@ Both published gems are therefore too old to use here: `that_language` 0.1.2
 does not run on Ruby 3 or later, and `that_language-service` 0.1.3 is the
 Sinatra 1.4 / Rack 1 stack, which cannot even load on Ruby 4.0. Once
 `that_language` 0.1.3 is released, the first git line can go.
+
+Git sources do not make the build float. `Gemfile.lock` records a revision for
+each, and the image sets `BUNDLE_FROZEN=true`, so a build installs those exact
+commits and a push to either upstream repository does not change what this image
+contains. Moving to newer upstream code means regenerating the lock, which is a
+commit here — the trade is reproducibility for having to bump deliberately, and
+nothing warns you when upstream has moved ahead.
 
 ## Layout
 
